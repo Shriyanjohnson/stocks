@@ -1,7 +1,6 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import plotly.graph_objects as go
 import numpy as np
 from datetime import datetime, timedelta
 import random
@@ -60,12 +59,6 @@ st.markdown("""
         .button:hover {
             background-color: #5f9ea0;
         }
-        .chart-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-top: 20px;
-        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -90,19 +83,6 @@ def simple_prediction(data):
         return "UP"
     else:
         return "DOWN"
-
-# Function to simulate projected prices for the next year
-def simulate_price_projection(data):
-    # Let's simulate the next year's prices based on a simple random walk model
-    last_price = data['Close'].iloc[-1]
-    projections = [last_price]
-
-    # Simulate weekly prices for the next 52 weeks (1 year)
-    for _ in range(52):
-        next_price = projections[-1] * (1 + random.uniform(-0.05, 0.05))  # 5% weekly volatility
-        projections.append(next_price)
-    
-    return projections
 
 # Function to get SPY options contracts and generate strike price and expiration date
 def get_spy_options():
@@ -170,26 +150,6 @@ else:
     st.write(f"**Recommended SPY Put Option (Expiration: {options_data['expiration_date']}):**")
     st.write(f"- Put Option Strike Price: **${options_data['put_option']}**")
 st.markdown('</div>', unsafe_allow_html=True)
-
-# Add a button for showing the price projection chart
-if st.button('Show Projected Price Chart', key='chart'):
-    st.write("### Projected Price for the Next Year")
-    projections = simulate_price_projection(data)
-
-    # Create a plot of the projected prices for the next year
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=np.arange(0, 53), y=projections, mode='lines', name="Projected Price"))
-
-    # Update layout for the chart
-    fig.update_layout(
-        title="Projected SPY Price for the Next Year",
-        xaxis_title="Weeks",
-        yaxis_title="Price (USD)",
-        template="plotly_dark"
-    )
-
-    # Show the chart in Streamlit
-    st.plotly_chart(fig)
 
 # Footer with "Made by Shriyan Kandula"
 st.markdown('<p class="footer">Made by Shriyan Kandula</p>', unsafe_allow_html=True)
