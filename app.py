@@ -9,6 +9,7 @@ st.markdown("""
         body {
             background-color: #f0f8ff;
             color: #333;
+            font-family: Arial, sans-serif;
         }
         .title {
             color: #2e8b57;
@@ -32,6 +33,25 @@ st.markdown("""
             border: 1px solid #4682b4;
             border-radius: 10px;
             padding: 10px;
+        }
+        .footer {
+            text-align: center;
+            font-size: 18px;
+            color: #4682b4;
+            margin-top: 30px;
+        }
+        .button {
+            background-color: #4682b4;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 18px;
+            margin: 10px;
+            border: none;
+            cursor: pointer;
+        }
+        .button:hover {
+            background-color: #5f9ea0;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -61,14 +81,13 @@ def simple_prediction(data):
 st.markdown('<p class="title">S&P 500 Prediction App</p>', unsafe_allow_html=True)
 st.write("This simple app predicts if the S&P 500 will go UP or DOWN based on the last two closing prices.")
 
-# Load data
-data = load_data()
-
-# Add a button to refresh the data
-if st.button('Refresh Data'):
+# Add a refresh button to update the data
+if st.button('Refresh Data', key='refresh', help="Click to refresh the data"):
     data = load_data()
     st.write("### Latest Data Refreshed")
     st.write(data.tail())
+else:
+    data = load_data()
 
 # Display the latest data in a styled table
 st.markdown('<p class="header">### Latest S&P 500 Data</p>', unsafe_allow_html=True)
@@ -83,3 +102,6 @@ prediction = simple_prediction(data)
 st.markdown('<div class="prediction-box">', unsafe_allow_html=True)
 st.write(f"The prediction for tomorrow's S&P 500 movement is: **{prediction}**")
 st.markdown('</div>', unsafe_allow_html=True)
+
+# Footer with "Made by Shriyan Kandula"
+st.markdown('<p class="footer">Made by Shriyan Kandula</p>', unsafe_allow_html=True
