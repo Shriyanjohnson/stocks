@@ -1,11 +1,13 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+from datetime import datetime
 
 # Function to download the S&P 500 data
 def load_data():
     ticker = "^GSPC"  # S&P 500 symbol
-    data = yf.download(ticker, start="2020-01-01", end="2025-01-01")
+    today = datetime.today().strftime('%Y-%m-%d')  # Get today's date dynamically
+    data = yf.download(ticker, start="2020-01-01", end=today)  # Use dynamic end date
     return data
 
 # Function to make a simple prediction based on the last two closing prices
