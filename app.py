@@ -1,14 +1,15 @@
-import yfinance as yf
-import pandas as pd
-import numpy as np
 import streamlit as st
-import plotly.graph_objects as go
+import yfinance as yf
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
 
-# Download stock data
-def load_data(symbol='SPY'):
-    data = yf.download(symbol, start="2018-01-01", end="2025-01-01")
+# Load data
+def load_data(ticker='SPY'):
+    data = yf.download(ticker, period="5y", interval="1d")
     return data
 
 # Prepare data for prediction with simple features
@@ -17,7 +18,7 @@ def prepare_data(data):
     data['SMA_200'] = data['Close'].rolling(window=200).mean()
     data['RSI'] = 100 - (100 / (1 + (data['Close'].diff(1).where(lambda x: x > 0, 0).rolling(window=14).mean() / 
                                     data['Close'].diff(1).where(lambda x: x < 0, 0).rolling(window=14).mean())))
-    
+
     # Drop rows with NaN values
     data.dropna(inplace=True)
 
@@ -36,10 +37,15 @@ def train_model(X, y):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
     scaler = StandardScaler()
+
+    # Drop NaN values from features before scaling
+    X_train = X_train.dropna()
+    X_test = X_test.dropna()
+
+    # Scale the data
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
 
-    from sklearn.linear_model import LogisticRegression
     model = LogisticRegression()
     model.fit(X_train_scaled, y_train)
 
@@ -49,45 +55,53 @@ def train_model(X, y):
 # Make prediction
 def make_prediction(model, data):
     X = data[['SMA_50', 'SMA_200', 'RSI']].tail(1)
+    
+    # Drop any NaN values in the most recent data
+    X = X.dropna()
+
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
     prediction = model.predict(X_scaled)
     return prediction[0]
 
-# Displaying the UI
+# Show UI
 def show_ui():
-    st.title("SPY Stock Prediction & Options Recommendation")
+    st.title("S&P 500 Prediction and Options Recommendation")
+    ticker = st.text_input('Enter Ticker Symbol', 'SPY')
+
+    # Load data
+    data = load_data(ticker)
     
-    # Load data and model
-    data = load_data()
+    st.write("Stock Data (Last 5 Years):")
+    st.write(data.tail())
+
+    # Prepare data
     X, y = prepare_data(data)
+
+    # Train model
     model, accuracy = train_model(X, y)
-    
-    # Display Model Accuracy
-    st.subheader(f"Model Accuracy: {accuracy * 100:.2f}%")
-    
-    # Predict next week's movement
+
+    st.write(f"Model Accuracy: {accuracy * 100:.2f}%")
+
+    # Show prediction
     prediction = make_prediction(model, data)
     
     if prediction == 1:
-        st.write("### Prediction: Bullish")
-        st.write("Recommended Action: **Buy Call Option**")
+        st.write("Prediction: The stock is predicted to go up. Consider buying a call option.")
     else:
-        st.write("### Prediction: Bearish")
-        st.write("Recommended Action: **Buy Put Option**")
-    
-    # Display chart for the last 5 years
-    st.subheader("SPY Stock Chart (Last 5 Years)")
-    fig = go.Figure()
-    fig.add_trace(go.Candlestick(x=data.index,
-                    open=data['Open'], high=data['High'],
-                    low=data['Low'], close=data['Close'],
-                    name='SPY'))
-    st.plotly_chart(fig)
+        st.write("Prediction: The stock is predicted to go down. Consider buying a put option.")
+        
+    # Show chart
+    if st.button('Show Chart'):
+        fig, ax = plt.subplots()
+        ax.plot(data.index, data['Close'])
+        ax.set_title(f'{ticker} Closing Price Over Last 5 Years')
+        ax.set_xlabel('Date')
+        ax.set_ylabel('Price (USD)')
+        st.pyplot(fig)
 
-    # Footer
-    st.markdown('<p style="text-align: center;">Made by Shriyan Kandula</p>', unsafe_allow_html=True)
+    st.markdown('<p class="footer">Made by Shriyan Kandula</p>', unsafe_allow_html=True)
 
 # Run the app
 if __name__ == "__main__":
