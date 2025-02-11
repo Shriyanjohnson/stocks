@@ -19,8 +19,8 @@ def prepare_data(data):
     data['RSI'] = 100 - (100 / (1 + (data['Close'].diff(1).where(lambda x: x > 0, 0).rolling(window=14).mean() / 
                                     data['Close'].diff(1).where(lambda x: x < 0, 0).rolling(window=14).mean())))
 
-    # Drop rows with NaN values
-    data.dropna(inplace=True)
+    # Drop rows with NaN values in the features (SMA and RSI)
+    data.dropna(subset=['SMA_50', 'SMA_200', 'RSI'], inplace=True)
 
     features = ['SMA_50', 'SMA_200', 'RSI']
     
@@ -38,11 +38,7 @@ def train_model(X, y):
 
     scaler = StandardScaler()
 
-    # Drop NaN values from features before scaling
-    X_train = X_train.dropna()
-    X_test = X_test.dropna()
-
-    # Handle missing values by filling with mean (if any)
+    # Handle any NaN values in the dataset by filling with the column mean before scaling
     X_train = X_train.fillna(X_train.mean())
     X_test = X_test.fillna(X_test.mean())
 
@@ -60,10 +56,7 @@ def train_model(X, y):
 def make_prediction(model, data):
     X = data[['SMA_50', 'SMA_200', 'RSI']].tail(1)
     
-    # Drop any NaN values in the most recent data
-    X = X.dropna()
-
-    # Handle missing values by filling with mean
+    # Handle any NaN values in the most recent data
     X = X.fillna(X.mean())
 
     scaler = StandardScaler()
