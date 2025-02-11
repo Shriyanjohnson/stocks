@@ -10,8 +10,13 @@ def load_data():
 
 # Function to make a simple prediction based on the last two closing prices
 def simple_prediction(data):
-    last_close = data['Close'].iloc[-1]  # Last closing price
-    previous_close = data['Close'].iloc[-2]  # Previous closing price
+    # Ensure we're getting scalar values (not Series)
+    last_close = data['Close'].iloc[-1]
+    previous_close = data['Close'].iloc[-2]
+    
+    # Convert to float (to make sure we're working with scalar numbers)
+    last_close = float(last_close)
+    previous_close = float(previous_close)
     
     if last_close > previous_close:
         return "UP"
