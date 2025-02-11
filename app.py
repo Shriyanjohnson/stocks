@@ -1,7 +1,10 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import plotly.graph_objects as go
+import numpy as np
 from datetime import datetime, timedelta
+import random
 
 # Custom CSS for the colorful design
 st.markdown("""
@@ -15,12 +18,14 @@ st.markdown("""
             color: #2e8b57;
             font-size: 40px;
             font-weight: bold;
+            text-align: center;
         }
         .header {
             background-color: #4682b4;
             color: white;
             padding: 20px;
             border-radius: 10px;
+            text-align: center;
         }
         .prediction-box {
             background-color: #ffcccb;
@@ -35,11 +40,6 @@ st.markdown("""
             border-radius: 10px;
             color: #333;
             font-size: 20px;
-        }
-        .data-table {
-            border: 1px solid #4682b4;
-            border-radius: 10px;
-            padding: 10px;
         }
         .footer {
             text-align: center;
@@ -60,14 +60,20 @@ st.markdown("""
         .button:hover {
             background-color: #5f9ea0;
         }
+        .chart-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 20px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
-# Function to download the SPY data
+# Function to download SPY data
 def load_data():
     ticker = "SPY"  # SPY ETF symbol
     today = datetime.today().strftime('%Y-%m-%d')  # Get today's date dynamically
-    data = yf.download(ticker, start="2020-01-01", end=today)  # Use dynamic end date
+    data = yf.download(ticker, start="2018-01-01", end=today)  # Get the past 5 years of data
     return data
 
 # Function to make a simple prediction based on the last two closing prices
@@ -79,10 +85,24 @@ def simple_prediction(data):
     last_close = float(last_close)
     previous_close = float(previous_close)
     
+    # Predict an upward or downward movement for the next few days (till the end of the week)
     if last_close > previous_close:
         return "UP"
     else:
         return "DOWN"
+
+# Function to simulate projected prices for the next year
+def simulate_price_projection(data):
+    # Let's simulate the next year's prices based on a simple random walk model
+    last_price = data['Close'].iloc[-1]
+    projections = [last_price]
+
+    # Simulate weekly prices for the next 52 weeks (1 year)
+    for _ in range(52):
+        next_price = projections[-1] * (1 + random.uniform(-0.05, 0.05))  # 5% weekly volatility
+        projections.append(next_price)
+    
+    return projections
 
 # Function to get SPY options contracts and generate strike price and expiration date
 def get_spy_options():
@@ -124,33 +144,52 @@ st.write("This simple app predicts if the SPY ETF will go UP or DOWN based on th
 if st.button('Refresh Data', key='refresh', help="Click to refresh the data"):
     data = load_data()
     st.write("### Latest Data Refreshed")
-    st.write(data.tail())
 else:
     data = load_data()
 
-# Display the latest data in a styled table
-st.markdown('<p class="header">### Latest SPY ETF Data</p>', unsafe_allow_html=True)
-st.markdown('<div class="data-table">', unsafe_allow_html=True)
-st.write(data.tail())
-st.markdown('</div>', unsafe_allow_html=True)
+# Display prediction and options button
+st.markdown('<p class="header">### SPY ETF Prediction for the Week</p>', unsafe_allow_html=True)
 
-# Make a simple prediction
+# Make a simple prediction for the trend
 prediction = simple_prediction(data)
 
 # Display prediction in a styled box
 st.markdown('<div class="prediction-box">', unsafe_allow_html=True)
-st.write(f"The prediction for tomorrow's SPY ETF movement is: **{prediction}**")
+st.write(f"The prediction for SPY ETF movement till the end of this week is: **{prediction}**")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Get the SPY options data and display
+# Get the SPY options data and display the correct option based on the prediction
 options_data = get_spy_options()
 
-# Display options contracts in a styled box
+# Display the recommended option (call or put) based on the prediction
 st.markdown('<div class="options-box">', unsafe_allow_html=True)
-st.write(f"**Recommended SPY Option Contracts for Next Friday (Expiration: {options_data['expiration_date']}):**")
-st.write(f"- Call Option Strike Price: **${options_data['call_option']}**")
-st.write(f"- Put Option Strike Price: **${options_data['put_option']}**")
+if prediction == "UP":
+    st.write(f"**Recommended SPY Call Option (Expiration: {options_data['expiration_date']}):**")
+    st.write(f"- Call Option Strike Price: **${options_data['call_option']}**")
+else:
+    st.write(f"**Recommended SPY Put Option (Expiration: {options_data['expiration_date']}):**")
+    st.write(f"- Put Option Strike Price: **${options_data['put_option']}**")
 st.markdown('</div>', unsafe_allow_html=True)
+
+# Add a button for showing the price projection chart
+if st.button('Show Projected Price Chart', key='chart'):
+    st.write("### Projected Price for the Next Year")
+    projections = simulate_price_projection(data)
+
+    # Create a plot of the projected prices for the next year
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=np.arange(0, 53), y=projections, mode='lines', name="Projected Price"))
+
+    # Update layout for the chart
+    fig.update_layout(
+        title="Projected SPY Price for the Next Year",
+        xaxis_title="Weeks",
+        yaxis_title="Price (USD)",
+        template="plotly_dark"
+    )
+
+    # Show the chart in Streamlit
+    st.plotly_chart(fig)
 
 # Footer with "Made by Shriyan Kandula"
 st.markdown('<p class="footer">Made by Shriyan Kandula</p>', unsafe_allow_html=True)
