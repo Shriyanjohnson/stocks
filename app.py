@@ -42,6 +42,10 @@ def train_model(X, y):
     X_train = X_train.dropna()
     X_test = X_test.dropna()
 
+    # Handle missing values by filling with mean (if any)
+    X_train = X_train.fillna(X_train.mean())
+    X_test = X_test.fillna(X_test.mean())
+
     # Scale the data
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
@@ -58,6 +62,9 @@ def make_prediction(model, data):
     
     # Drop any NaN values in the most recent data
     X = X.dropna()
+
+    # Handle missing values by filling with mean
+    X = X.fillna(X.mean())
 
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
