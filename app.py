@@ -104,4 +104,4 @@ st.write(f"The prediction for tomorrow's S&P 500 movement is: **{prediction}**")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # Footer with "Made by Shriyan Kandula"
-st.markdown('<p class="footer">Made by Shriyan Kandula</p>', unsafe_allow_html=True
+st.markdown('<p class="footer">Made by Shriyan Kandula</p>', unsafe_allow_html=True)
