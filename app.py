@@ -14,13 +14,23 @@ def load_data(ticker='SPY'):
 
 # Prepare data for prediction with simple features
 def prepare_data(data):
+    # Calculate moving averages and RSI
     data['SMA_50'] = data['Close'].rolling(window=50).mean()
     data['SMA_200'] = data['Close'].rolling(window=200).mean()
     data['RSI'] = 100 - (100 / (1 + (data['Close'].diff(1).where(lambda x: x > 0, 0).rolling(window=14).mean() / 
                                     data['Close'].diff(1).where(lambda x: x < 0, 0).rolling(window=14).mean())))
 
-    # Drop rows with NaN values in the features (SMA and RSI)
-    data.dropna(subset=['SMA_50', 'SMA_200', 'RSI'], inplace=True)
+    # Ensure all calculated columns are present
+    required_columns = ['SMA_50', 'SMA_200', 'RSI']
+    
+    # Check if all required columns are in the data
+    missing_columns = [col for col in required_columns if col not in data.columns]
+    if missing_columns:
+        st.error(f"Missing columns: {missing_columns}. Unable to calculate required features.")
+        return None, None
+    
+    # Drop rows with NaN values in the calculated columns
+    data.dropna(subset=required_columns, inplace=True)
 
     features = ['SMA_50', 'SMA_200', 'RSI']
     
@@ -78,6 +88,9 @@ def show_ui():
 
     # Prepare data
     X, y = prepare_data(data)
+    
+    if X is None or y is None:
+        return  # Exit if data preparation failed
 
     # Train model
     model, accuracy = train_model(X, y)
