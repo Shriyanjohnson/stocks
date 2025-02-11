@@ -1,87 +1,142 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import talib
-from sklearn.ensemble import RandomForestClassifier
+import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import streamlit as st
+import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from ta import add_all_ta_features
 
-# Load SPY data
-def load_data():
-    ticker = "SPY"
-    data = yf.download(ticker, start="2018-01-01", end=pd.to_datetime("today").strftime('%Y-%m-%d'))
+# Download stock data
+def load_data(symbol='SPY'):
+    data = yf.download(symbol, start="2018-01-01", end="2025-01-01")
     return data
 
-# Add technical indicators
+# Add more indicators using 'ta' library
 def add_technical_indicators(data):
-    data['SMA_50'] = data['Close'].rolling(window=50).mean()
-    data['SMA_200'] = data['Close'].rolling(window=200).mean()
-    data['EMA_50'] = data['Close'].ewm(span=50, adjust=False).mean()
-    data['RSI'] = talib.RSI(data['Close'], timeperiod=14)
-    macd, macdsignal, macdhist = talib.MACD(data['Close'], fastperiod=12, slowperiod=26, signalperiod=9)
-    data['MACD'] = macd
-    data['MACD_Signal'] = macdsignal
-    upper, middle, lower = talib.BBANDS(data['Close'], timeperiod=20)
-    data['Bollinger_Upper'] = upper
-    data['Bollinger_Lower'] = lower
+    data = add_all_ta_features(data, open="Open", high="High", low="Low", close="Close", volume="Volume")
     return data
 
-# Prepare features and target for model training
+# Prepare data for prediction
 def prepare_data(data):
-    data = data.dropna()  # Drop rows with missing values
-    features = ['SMA_50', 'SMA_200', 'EMA_50', 'RSI', 'MACD', 'MACD_Signal', 'Bollinger_Upper', 'Bollinger_Lower', 'Close']
+    # Adding technical indicators
+    data = add_technical_indicators(data)
+
+    # Drop rows with NaN values
+    data.dropna(inplace=True)
+
+    # Feature columns
+    features = ['trend_sma_fast', 'trend_sma_slow', 'momentum_rsi', 'momentum_stoch_rsi', 'volatility_bbh', 'volatility_bbl', 'volume_adi']
+    
+    # Target column (1 if price goes up, 0 if it goes down)
+    data['target'] = np.where(data['Close'].shift(-1) > data['Close'], 1, 0)
+
+    # Split data into features and target
     X = data[features]
-    data['Price_Change'] = data['Close'].shift(-1) - data['Close']
-    data['Target'] = np.where(data['Price_Change'] > 0, 1, 0)
-    y = data['Target']
+    y = data['target']
+
     return X, y
 
-# Train the model
+# Train the model (XGBoost)
 def train_model(X, y):
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    # Split data into train and test sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+    # Scale the features
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
 
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    # Train the XGBoost model
+    model = xgb.XGBClassifier(use_label_encoder=False, eval_metric='logloss')
     model.fit(X_train_scaled, y_train)
 
-    return model, scaler
+    # Evaluate the model
+    accuracy = model.score(X_test_scaled, y_test)
+    return model, accuracy
 
-# Predict the movement
-def predict_movement(model, data, scaler):
-    data = add_technical_indicators(data)
-    last_data = data.iloc[-1:]
-    X_latest = last_data[['SMA_50', 'SMA_200', 'EMA_50', 'RSI', 'MACD', 'MACD_Signal', 'Bollinger_Upper', 'Bollinger_Lower', 'Close']]
-    X_latest_scaled = scaler.transform(X_latest)
-    prediction = model.predict(X_latest_scaled)
-    return "UP" if prediction == 1 else "DOWN"
+# Make prediction
+def make_prediction(model, data):
+    # Prepare the data
+    X = data[['trend_sma_fast', 'trend_sma_slow', 'momentum_rsi', 'momentum_stoch_rsi', 'volatility_bbh', 'volatility_bbl', 'volume_adi']].tail(1)
+    
+    # Scale the data
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
 
-# Function to display options (call or put) based on prediction
-def display_option(prediction):
-    if prediction == "UP":
-        st.write("**Recommended SPY Call Option**")
-        st.write("Strike Price: **$425**")  # Example, replace with actual strike price
+    # Make prediction
+    prediction = model.predict(X_scaled)
+    return prediction[0]
+
+# Displaying the UI
+def show_ui():
+    st.title("SPY Stock Prediction & Options Recommendation")
+    
+    # Load data and model
+    data = load_data()
+    X, y = prepare_data(data)
+    model, accuracy = train_model(X, y)
+    
+    # Display Model Accuracy
+    st.subheader(f"Model Accuracy: {accuracy * 100:.2f}%")
+    
+    # Predict next week's movement
+    prediction = make_prediction(model, data)
+    
+    if prediction == 1:
+        st.write("### Prediction: Bullish")
+        st.write("Recommended Action: **Buy Call Option**")
     else:
-        st.write("**Recommended SPY Put Option**")
-        st.write("Strike Price: **$420**")  # Example, replace with actual strike price
+        st.write("### Prediction: Bearish")
+        st.write("Recommended Action: **Buy Put Option**")
+    
+    # Display chart for the last 5 years
+    st.subheader("SPY Stock Chart (Last 5 Years)")
+    fig = go.Figure()
+    fig.add_trace(go.Candlestick(x=data.index,
+                    open=data['Open'], high=data['High'],
+                    low=data['Low'], close=data['Close'],
+                    name='SPY'))
+    st.plotly_chart(fig)
 
-# Streamlit Layout
-st.markdown('<h1 style="text-align:center;">SPY ETF Stock Prediction</h1>', unsafe_allow_html=True)
+    # Footer
+    st.markdown('<p style="text-align: center;">Made by Shriyan Kandula</p>', unsafe_allow_html=True)
 
-# Load data and prepare model
-data = load_data()
-X, y = prepare_data(data)
-model, scaler = train_model(X, y)
+# Run the app
+if __name__ == "__main__":
+    show_ui()
+2. Add the UI Features:
+We can make it colorful and interactive with Streamlit widgets:
 
-# Show model accuracy
-st.write(f"Model Training Complete. Accuracy: {model.score(X, y) * 100:.2f}%")
+Buttons: You can add buttons that display the prediction or show a graph with one click.
+Colors: Add some basic CSS to improve the visual appeal.
+Example:
 
-# Predict the movement for the week
-prediction = predict_movement(model, data, scaler)
+python
+Copy
+Edit
+# Add CSS for the footer and some styling
+st.markdown(
+    """
+    <style>
+    .footer {
+        text-align: center;
+        font-size: 18px;
+        color: #4CAF50;
+        font-weight: bold;
+    }
+    .header {
+        text-align: center;
+        font-size: 36px;
+        color: #FF5733;
+        font-weight: bold;
+    }
+    </style>
+    """, unsafe_allow_html=True
+)
 
-st.write(f"**Prediction for SPY ETF movement for the week:** {prediction}")
-display_option(prediction)
-
-st.markdown('<footer style="text-align:center;">Made by Shriyan Kandula</footer>', unsafe_allow_html=True)
+# Add button to show prediction
+if st.button("Predict SPY Movement"):
+    show_ui()
