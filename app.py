@@ -29,7 +29,7 @@ def prepare_data(data):
         st.error(f"Missing columns: {missing_columns}. Unable to calculate required features.")
         return None, None
     
-    # Drop rows with NaN values in the calculated columns
+    # Drop rows with NaN values in the calculated columns only if they exist
     data.dropna(subset=required_columns, inplace=True)
 
     features = ['SMA_50', 'SMA_200', 'RSI']
