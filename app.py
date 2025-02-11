@@ -1,131 +1,90 @@
 import streamlit as st
 import yfinance as yf
-import numpy as np
+import datetime
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
-import plotly.graph_objs as go
 
-# Load data
-def load_data(ticker='SPY'):
-    data = yf.download(ticker, period="5y", interval="1d")
+# Function to fetch SPY stock data
+def get_stock_data():
+    today = datetime.date.today()
+    start_date = today - datetime.timedelta(days=365 * 2)  # 2 years of data
+    data = yf.download('SPY', start=start_date, end=today)
     return data
 
-# Prepare data for prediction with simple features
-def prepare_data(data):
-    # Ensure there is enough data for calculations
-    if data.shape[0] < 200:
-        st.error("Not enough data to calculate SMA_50 and SMA_200. Please select a different ticker or timeframe.")
-        return None, None
-
-    # Calculate moving averages and RSI
-    data['SMA_50'] = data['Close'].rolling(window=50).mean()
-    data['SMA_200'] = data['Close'].rolling(window=200).mean()
-    data['RSI'] = 100 - (100 / (1 + (data['Close'].diff(1).where(lambda x: x > 0, 0).rolling(window=14).mean() /
-                                    data['Close'].diff(1).where(lambda x: x < 0, 0).rolling(window=14).mean())))
-
-    # Ensure all calculated columns are present
-    required_columns = ['SMA_50', 'SMA_200', 'RSI']
+# Function to calculate technical indicators (SMA50, SMA200, RSI)
+def calculate_indicators(data):
+    data["SMA_50"] = data["Close"].rolling(window=50).mean()
+    data["SMA_200"] = data["Close"].rolling(window=200).mean()
+    data["Price Change"] = data["Close"].pct_change()
     
-    # Handle missing columns and drop NaN rows if columns exist
-    missing_columns = [col for col in required_columns if col not in data.columns or data[col].isna().all()]
-    if missing_columns:
-        st.error(f"Missing or insufficient data for columns: {missing_columns}.")
-        return None, None
+    # RSI Calculation
+    delta = data["Close"].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    data["RSI"] = 100 - (100 / (1 + rs))
 
-    # Drop rows with NaN values in the calculated columns
-    data.dropna(subset=required_columns, inplace=True)
+    data.dropna(inplace=True)
+    return data
 
-    features = ['SMA_50', 'SMA_200', 'RSI']
-
-    # Target column (1 if price goes up, 0 if it goes down)
-    data['target'] = np.where(data['Close'].shift(-1) > data['Close'], 1, 0)
-
+# Function to prepare the dataset for training
+def prepare_data(data):
+    data["Target"] = (data["Close"].shift(-1) > data["Close"]).astype(int)  # 1 if price goes up, else 0
+    
+    # Features: SMA, RSI, and Price Change
+    features = ["SMA_50", "SMA_200", "RSI", "Price Change"]
     X = data[features]
-    y = data['target']
-
+    y = data["Target"]
+    
     return X, y
 
-# Train the model (Logistic Regression)
+# Train a Logistic Regression model
 def train_model(X, y):
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     scaler = StandardScaler()
-
-    # Handle any NaN values in the dataset by filling with the column mean before scaling
-    X_train = X_train.fillna(X_train.mean())
-    X_test = X_test.fillna(X_test.mean())
-
-    # Scale the data
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
 
     model = LogisticRegression()
     model.fit(X_train_scaled, y_train)
-
     accuracy = model.score(X_test_scaled, y_test)
-    return model, accuracy
 
-# Make prediction
-def make_prediction(model, data):
-    X = data[['SMA_50', 'SMA_200', 'RSI']].tail(1)
-    
-    # Handle any NaN values in the most recent data
-    X = X.fillna(X.mean())
+    return model, scaler, accuracy
 
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+# Function to predict market movement
+def predict_market(model, scaler, latest_data):
+    latest_scaled = scaler.transform([latest_data])
+    prediction = model.predict(latest_scaled)[0]
+    return "UP" if prediction == 1 else "DOWN"
 
-    prediction = model.predict(X_scaled)
-    return prediction[0]
+# Function to recommend an options trade
+def get_options_recommendation(prediction):
+    return "Call Option" if prediction == "UP" else "Put Option"
 
-# Show UI
-def show_ui():
-    st.title("S&P 500 Prediction and Options Recommendation")
-    ticker = st.text_input('Enter Ticker Symbol', 'SPY')
+# Load and process stock data
+data = get_stock_data()
+data = calculate_indicators(data)
 
-    # Load data
-    data = load_data(ticker)
-    
-    st.write("Stock Data (Last 5 Years):")
-    st.write(data.tail())
+# Prepare data and train the model
+X, y = prepare_data(data)
+model, scaler, accuracy = train_model(X, y)
 
-    # Prepare data
-    X, y = prepare_data(data)
-    
-    if X is None or y is None:
-        return  # Exit if data preparation failed
+# Streamlit UI
+st.title("S&P 500 (SPY) Prediction App")
+st.write(f"Model Accuracy: **{accuracy:.2%}**")
 
-    # Train model
-    model, accuracy = train_model(X, y)
+st.write("Click the button to get a prediction on whether SPY will go **up or down** for the next trading day.")
 
-    st.write(f"Model Accuracy: {accuracy * 100:.2f}%")
+# Button to trigger prediction
+if st.button("Predict Market Direction"):
+    latest_data = data.iloc[-1][["SMA_50", "SMA_200", "RSI", "Price Change"]].values
+    market_prediction = predict_market(model, scaler, latest_data)
+    option_recommendation = get_options_recommendation(market_prediction)
 
-    # Show prediction
-    prediction = make_prediction(model, data)
-    
-    if prediction == 1:
-        st.write("Prediction: The stock is predicted to go up. Consider buying a call option.")
-    else:
-        st.write("Prediction: The stock is predicted to go down. Consider buying a put option.")
-        
-    # Show chart using plotly
-    if st.button('Show Chart'):
-        fig = go.Figure()
+    st.subheader(f"📈 Market Prediction: **{market_prediction}**")
+    st.subheader(f"📊 Options Recommendation: **{option_recommendation}**")
 
-        # Add closing price trace
-        fig.add_trace(go.Scatter(x=data.index, y=data['Close'], mode='lines', name='Close Price'))
-
-        fig.update_layout(title=f'{ticker} Closing Price Over Last 5 Years',
-                          xaxis_title='Date',
-                          yaxis_title='Price (USD)',
-                          template="plotly_dark")
-
-        st.plotly_chart(fig)
-
-    st.markdown('<p class="footer">Made by Shriyan Kandula</p>', unsafe_allow_html=True)
-
-# Run the app
-if __name__ == "__main__":
-    show_ui()
+st.markdown("---")
+st.markdown("<p style='text-align:center; font-size:14px;'>Made by Shriyan Kandula</p>", unsafe_allow_html=True)
