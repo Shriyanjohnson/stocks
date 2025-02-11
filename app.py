@@ -2,10 +2,10 @@ import streamlit as st
 import yfinance as yf
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
+import plotly.graph_objs as go  # Use plotly for charting
 
 # Load data
 def load_data(ticker='SPY'):
@@ -92,14 +92,19 @@ def show_ui():
     else:
         st.write("Prediction: The stock is predicted to go down. Consider buying a put option.")
         
-    # Show chart
+    # Show chart using plotly
     if st.button('Show Chart'):
-        fig, ax = plt.subplots()
-        ax.plot(data.index, data['Close'])
-        ax.set_title(f'{ticker} Closing Price Over Last 5 Years')
-        ax.set_xlabel('Date')
-        ax.set_ylabel('Price (USD)')
-        st.pyplot(fig)
+        fig = go.Figure()
+
+        # Add closing price trace
+        fig.add_trace(go.Scatter(x=data.index, y=data['Close'], mode='lines', name='Close Price'))
+
+        fig.update_layout(title=f'{ticker} Closing Price Over Last 5 Years',
+                          xaxis_title='Date',
+                          yaxis_title='Price (USD)',
+                          template="plotly_dark")  # Optional: Add a dark theme
+
+        st.plotly_chart(fig)
 
     st.markdown('<p class="footer">Made by Shriyan Kandula</p>', unsafe_allow_html=True)
 
