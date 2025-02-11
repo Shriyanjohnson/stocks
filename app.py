@@ -5,7 +5,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
-import plotly.graph_objs as go  # Use plotly for charting
+import plotly.graph_objs as go
 
 # Load data
 def load_data(ticker='SPY'):
@@ -14,32 +14,37 @@ def load_data(ticker='SPY'):
 
 # Prepare data for prediction with simple features
 def prepare_data(data):
+    # Ensure there is enough data for calculations
+    if data.shape[0] < 200:
+        st.error("Not enough data to calculate SMA_50 and SMA_200. Please select a different ticker or timeframe.")
+        return None, None
+
     # Calculate moving averages and RSI
     data['SMA_50'] = data['Close'].rolling(window=50).mean()
     data['SMA_200'] = data['Close'].rolling(window=200).mean()
-    data['RSI'] = 100 - (100 / (1 + (data['Close'].diff(1).where(lambda x: x > 0, 0).rolling(window=14).mean() / 
+    data['RSI'] = 100 - (100 / (1 + (data['Close'].diff(1).where(lambda x: x > 0, 0).rolling(window=14).mean() /
                                     data['Close'].diff(1).where(lambda x: x < 0, 0).rolling(window=14).mean())))
 
     # Ensure all calculated columns are present
     required_columns = ['SMA_50', 'SMA_200', 'RSI']
     
-    # Check if all required columns are in the data
-    missing_columns = [col for col in required_columns if col not in data.columns]
+    # Handle missing columns and drop NaN rows if columns exist
+    missing_columns = [col for col in required_columns if col not in data.columns or data[col].isna().all()]
     if missing_columns:
-        st.error(f"Missing columns: {missing_columns}. Unable to calculate required features.")
+        st.error(f"Missing or insufficient data for columns: {missing_columns}.")
         return None, None
-    
-    # Drop rows with NaN values in the calculated columns only if they exist
+
+    # Drop rows with NaN values in the calculated columns
     data.dropna(subset=required_columns, inplace=True)
 
     features = ['SMA_50', 'SMA_200', 'RSI']
-    
+
     # Target column (1 if price goes up, 0 if it goes down)
     data['target'] = np.where(data['Close'].shift(-1) > data['Close'], 1, 0)
 
     X = data[features]
     y = data['target']
-    
+
     return X, y
 
 # Train the model (Logistic Regression)
@@ -115,7 +120,7 @@ def show_ui():
         fig.update_layout(title=f'{ticker} Closing Price Over Last 5 Years',
                           xaxis_title='Date',
                           yaxis_title='Price (USD)',
-                          template="plotly_dark")  # Optional: Add a dark theme
+                          template="plotly_dark")
 
         st.plotly_chart(fig)
 
