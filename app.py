@@ -1,7 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Custom CSS for the colorful design
 st.markdown("""
@@ -27,6 +27,13 @@ st.markdown("""
             padding: 15px;
             border-radius: 10px;
             color: #8b0000;
+            font-size: 20px;
+        }
+        .options-box {
+            background-color: #e6f7ff;
+            padding: 15px;
+            border-radius: 10px;
+            color: #333;
             font-size: 20px;
         }
         .data-table {
@@ -56,9 +63,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Function to download the S&P 500 data
+# Function to download the SPY data
 def load_data():
-    ticker = "^GSPC"  # S&P 500 symbol
+    ticker = "SPY"  # SPY ETF symbol
     today = datetime.today().strftime('%Y-%m-%d')  # Get today's date dynamically
     data = yf.download(ticker, start="2020-01-01", end=today)  # Use dynamic end date
     return data
@@ -77,9 +84,41 @@ def simple_prediction(data):
     else:
         return "DOWN"
 
+# Function to get SPY options contracts and generate strike price and expiration date
+def get_spy_options():
+    ticker = "SPY"
+    spy = yf.Ticker(ticker)
+    
+    # Get the expiration dates for the options
+    expirations = spy.options
+    next_friday = datetime.today() + timedelta((4 - datetime.today().weekday()) % 7)  # Get next Friday
+    expiration_str = next_friday.strftime('%Y-%m-%d')
+    
+    # If next Friday is an available expiration date, use it, otherwise fallback to a random available expiration
+    if expiration_str in expirations:
+        expiration_date = expiration_str
+    else:
+        expiration_date = expirations[0]
+    
+    # Get call and put options data for the expiration date
+    options_data = spy.option_chain(expiration_date)
+    calls = options_data.calls
+    puts = options_data.puts
+    
+    # Select the closest strike price around the current price
+    current_price = spy.history(period="1d")['Close'].iloc[-1]
+    closest_call_strike = calls.loc[(calls['strike'] - current_price).abs().idxmin()]
+    closest_put_strike = puts.loc[(puts['strike'] - current_price).abs().idxmin()]
+    
+    return {
+        'call_option': closest_call_strike['strike'],
+        'put_option': closest_put_strike['strike'],
+        'expiration_date': expiration_date
+    }
+
 # Streamlit layout for the app
-st.markdown('<p class="title">S&P 500 Prediction App</p>', unsafe_allow_html=True)
-st.write("This simple app predicts if the S&P 500 will go UP or DOWN based on the last two closing prices.")
+st.markdown('<p class="title">SPY ETF Prediction App</p>', unsafe_allow_html=True)
+st.write("This simple app predicts if the SPY ETF will go UP or DOWN based on the last two closing prices.")
 
 # Add a refresh button to update the data
 if st.button('Refresh Data', key='refresh', help="Click to refresh the data"):
@@ -90,7 +129,7 @@ else:
     data = load_data()
 
 # Display the latest data in a styled table
-st.markdown('<p class="header">### Latest S&P 500 Data</p>', unsafe_allow_html=True)
+st.markdown('<p class="header">### Latest SPY ETF Data</p>', unsafe_allow_html=True)
 st.markdown('<div class="data-table">', unsafe_allow_html=True)
 st.write(data.tail())
 st.markdown('</div>', unsafe_allow_html=True)
@@ -100,7 +139,17 @@ prediction = simple_prediction(data)
 
 # Display prediction in a styled box
 st.markdown('<div class="prediction-box">', unsafe_allow_html=True)
-st.write(f"The prediction for tomorrow's S&P 500 movement is: **{prediction}**")
+st.write(f"The prediction for tomorrow's SPY ETF movement is: **{prediction}**")
+st.markdown('</div>', unsafe_allow_html=True)
+
+# Get the SPY options data and display
+options_data = get_spy_options()
+
+# Display options contracts in a styled box
+st.markdown('<div class="options-box">', unsafe_allow_html=True)
+st.write(f"**Recommended SPY Option Contracts for Next Friday (Expiration: {options_data['expiration_date']}):**")
+st.write(f"- Call Option Strike Price: **${options_data['call_option']}**")
+st.write(f"- Put Option Strike Price: **${options_data['put_option']}**")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # Footer with "Made by Shriyan Kandula"
